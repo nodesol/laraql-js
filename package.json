@@ -1,0 +1,29 @@
+{
+  "name": "laraql",
+  "version": "1.0.0",
+  "description": "An Eloquent-style ORM for Laravel Lighthouse GraphQL",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./Model": "./Model.js",
+    "./QueryBuilder": "./QueryBuilder.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "laravel",
+    "lighthouse",
+    "graphql",
+    "eloquent",
+    "orm",
+    "laraql"
+  ],
+  "author": "Amer Chaudhary<amer@nodesol.com>",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.15.2",
+    "pluralize": "^8.0.0"
+  }
+}
