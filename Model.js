@@ -3,14 +3,12 @@ import pluralize from 'pluralize';
 import QueryBuilder from './QueryBuilder.js';
 
 let _api = axios;
-let _headerCallback = (h) => h;
+let _headersCallback = (h) => h;
 let _onUnauthenticated = null;
 let _defaultBaseUrl = "";
 
 export default class Model {
     static baseUrl = "";
-
-    #original = {};
 
     constructor(attributes = {}) {
         this.fill(attributes);
@@ -18,13 +16,13 @@ export default class Model {
 
     /**
      * Global Configuration
-     * @param {Object} config - { url, api, headerCallback, router, onUnauthenticated }
+     * @param {Object} config - { url, api, headersCallback, router, onUnauthenticated }
      */
     static init(config) {
         if (!config || typeof config !== 'object') return;
         if (config.url) _defaultBaseUrl = config.url;
         if (config.api) _api = config.api;
-        if (config.headerCallback) _headerCallback = config.headerCallback;
+        if (config.headersCallback) _headersCallback = config.headersCallback;
         if (config.onUnauthenticated) _onUnauthenticated = config.onUnauthenticated;
     }
 
@@ -33,7 +31,7 @@ export default class Model {
     }
 
     static get _singularName() {
-        return this.name.charAt(0).toLowerCase() + this.name.slice(1);
+        return (this.name).split(/(?=[A-Z])/).join("_").toLowerCase();
     }
 
     static get _pluralName() {
@@ -41,8 +39,8 @@ export default class Model {
     }
 
     fill(attributes) {
+        console.log(attributes)
         Object.assign(this, attributes);
-        this.#original = JSON.parse(JSON.stringify(attributes));
         return this;
     }
 
@@ -50,47 +48,28 @@ export default class Model {
         return new this.constructor(JSON.parse(JSON.stringify(this)));
     }
 
-    getDirty() {
-        const dirty = {};
-        for (const key in this) {
-            // Skip private fields, functions, and internal metadata
-            if (key.startsWith('_') || key.startsWith('#') || typeof this[key] === 'function') continue;
-
-            if (JSON.stringify(this[key]) !== JSON.stringify(this.#original[key])) {
-                dirty[key] = this[key];
-            }
-        }
-        return dirty;
-    }
-
     async save(fields = ['id']) {
         const isUpdate = !!this.id;
-        const mutationName = `${isUpdate ? 'update' : 'create'}${this.constructor.name}`;
-        
-        const dirty = this.getDirty();
-        const input = isUpdate ? { id: this.id, ...dirty } : { ...this };
+        const mutationName = `${isUpdate ? 'update' : 'create'}`;
+        const {id,...input} =  this;
+        if (isUpdate && Object.keys(this).length === 0) return this;
 
-        if (isUpdate && Object.keys(dirty).length === 0) return this;
+        const query = this.generateMutation(fields,mutationName);
 
-        const query = `mutation($input: ${mutationName}Input!) { 
-            ${mutationName}(input: $input) { ${fields.join(' ')} } 
-        }`;
-
-        const data = await this.constructor.request(query, { input });
-        this.fill(data[mutationName]);
+        const data = await this.constructor.request(query, {id:id,input:input });
+        console.log(data);
+        this.fill(data[mutationName+this.constructor.name]);
         return this;
     }
 
-    async delete() {
-        if (!this.id) throw new Error("LaraQL: Cannot delete a model without an ID.");
-        const mutationName = `delete${this.constructor.name}`;
-        const query = `mutation($id: ID!) { ${mutationName}(id: $id) { id } }`;
-        await this.constructor.request(query, { id: this.id });
+    async delete(id) {
+        if (!this.id && !id) throw new Error("LaraQL: Cannot delete a model without an ID.");
+        const query = this.generateMutation(['id'],'delete');
+        await this.constructor.request(query, { id: id ?? this.id });
         return true;
     }
 
-    async update(attributes, fields = ['id']) {
-        Object.assign(this, attributes);
+    async update(fields = ['id']) {
         return this.save(fields);
     }
 
@@ -119,8 +98,7 @@ export default class Model {
             "Accept": "application/json",
             "Content-Type": "application/json"
         };
-        headers = _headerCallback(headers);
-
+         headers = _headersCallback(headers)
         // Extract operationName for better server-side logging
         const operationMatch = query?.match(/\b(query|mutation|subscription)\s+(\w+)/);
         const operationName = operationMatch ? operationMatch[2] : null;
@@ -164,5 +142,30 @@ export default class Model {
             }
         });
         return [...new Set(error_messages)]; // Unique errors only
+    }
+
+    generateMutation(fields,operation='create'){
+            let input ='';
+            let insert = '';
+            const operationName = operation+ this.constructor.name;
+            if(operation != 'delete'){
+                input +=`$input:${this.constructor.name}Input!`;
+                insert += 'input:$input'
+            }
+            if(operation == 'update'){
+                input += ','
+                insert += ','
+            }
+            if(operation != 'create'){
+                input += `$id:ID!`,
+                insert += 'id:$id'
+            }
+            return  `
+                mutation ${operationName}(${input}) {
+                    ${operationName}(${insert}){
+                        ${fields.join(" ")}
+                    }
+                }
+            `
     }
 }

@@ -56,7 +56,7 @@ export default class QueryBuilder {
             wherePart = `where: ${this._stringifyCondition(this.rawWhere)}`;
         } else if (this.filters.length > 0) {
             const conditions = this.filters.map(f => (
-                `{ column: ${f.column.toUpperCase()}, operator: ${f.operator.toUpperCase()}, value: ${JSON.stringify(f.value)} }`
+                `{ column: "${f.column.toUpperCase()}", operator: ${f.operator.toUpperCase()}, value: ${JSON.stringify(f.value)} }`
             ));
             wherePart = `where: { ${conditions.length > 1 ? `AND: [${conditions.join(', ')}]` : conditions[0]} }`;
         }
@@ -68,7 +68,7 @@ export default class QueryBuilder {
             args.push(`page: ${this._pagination.page}`);
         }
         if (this._orderBy.length > 0) {
-            const orders = this._orderBy.map(o => `{ column: ${o.column}, order: ${o.order} }`).join(', ');
+            const orders = this._orderBy.map(o => `{ column: "${o.column}", order: ${o.order} }`).join(', ');
             args.push(`orderBy: [${orders}]`);
         }
 
@@ -83,7 +83,7 @@ export default class QueryBuilder {
                 } 
             }`;
         } else {
-            query = `query { ${this.model._pluralName}${argsString} { ${fields.join(' ')} } }`;
+            query = `query { ${this.model._pluralName}${argsString} {data {${fields.join(' ')} }} }`;
         }
 
         const response = await this.model.request(query);
@@ -94,7 +94,6 @@ export default class QueryBuilder {
             result.data = result.data.map(item => new this.model(item));
             return result;
         }
-
-        return result.map(item => new this.model(item));
+        return result.data.map(item => new this.model(item));
     }
 }
