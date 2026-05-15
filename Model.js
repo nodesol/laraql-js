@@ -39,7 +39,6 @@ export default class Model {
     }
 
     fill(attributes) {
-        console.log(attributes)
         Object.assign(this, attributes);
         return this;
     }
@@ -53,11 +52,8 @@ export default class Model {
         const mutationName = `${isUpdate ? 'update' : 'create'}`;
         const {id,...input} =  this;
         if (isUpdate && Object.keys(this).length === 0) return this;
-
         const query = this.generateMutation(fields,mutationName);
-
         const data = await this.constructor.request(query, {id:id,input:input });
-        console.log(data);
         this.fill(data[mutationName+this.constructor.name]);
         return this;
     }
