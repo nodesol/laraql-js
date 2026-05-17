@@ -77,6 +77,9 @@ export default class Model {
         return this.query().where(...args);
     }
 
+    static whereRaw(rawObject={}){
+        return this.query().whereRaw(rawObject)
+    }
     static async all(fields = ['id']) {
         return this.query().get(fields);
     }
