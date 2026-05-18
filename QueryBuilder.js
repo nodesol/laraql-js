@@ -50,9 +50,9 @@ export default class QueryBuilder {
         return JSON.stringify(obj);
     }
 
-    async get(fields = ['id']) {
+    async get(fields) {
         let wherePart = '';
-
+        const fieldsSelection = fields ? fields.join(' ') : (this.model.returnType ?? 'id');
         if (this.rawWhere) {
             wherePart = `where: ${this._stringifyCondition(this.rawWhere)}`;
         } else if (this.filters.length > 0) {
@@ -79,12 +79,12 @@ export default class QueryBuilder {
         if (this._pagination) {
             query = `query ${this.model._pluralName} { 
                 ${this.model._pluralName}${argsString} { 
-                    data { ${fields.join(' ')} } 
+                    data { ${fieldsSelection} } 
                     paginatorInfo { total currentPage lastPage hasMorePages } 
                 } 
             }`;
         } else {
-            query = `query ${this.model._pluralName} { ${this.model._pluralName}${argsString} {data {${fields.join(' ')} }} }`;
+            query = `query ${this.model._pluralName} { ${this.model._pluralName}${argsString} {data {${fieldsSelection} }} }`;
         }
 
         const response = await this.model.request(query);

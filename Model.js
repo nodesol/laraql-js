@@ -9,16 +9,16 @@ let _defaultBaseUrl = "";
 
 export default class Model {
     static baseUrl = "";
+    static customPluralName = null;
+    static returnType = "id";
+    static fillable = [];
+    static dirty = [];
     _dirty = {};
 
     constructor(attributes = {}) {
         this.fill(attributes);
     }
 
-    /**
-     * Global Configuration
-     * @param {Object} config - { url, api, headersCallback, router, onUnauthenticated }
-     */
     static init(config) {
         if (!config || typeof config !== 'object') return;
         if (config.url) _defaultBaseUrl = config.url;
@@ -36,17 +36,20 @@ export default class Model {
     }
 
     static get _pluralName() {
-        return pluralize(this._singularName);
+        return this.customPluralName || pluralize(this._singularName);
     }
 
     fill(attributes) {
+        if (!attributes || typeof attributes !== 'object') return this;
+        
         Object.assign(this, attributes);
-        this.constructor?.dirty?.forEach((e)=>{
-        if (e in attributes) {
-            this._dirty[e] = attributes[e];
-        }
-        })
-        console.log(this)
+        
+        const dirtyFields = this.constructor.dirty || [];
+        dirtyFields.forEach((e) => {
+            if (e in attributes) {
+                this._dirty[e] = attributes[e];
+            }
+        });
         return this;
     }
 
@@ -57,18 +60,29 @@ export default class Model {
     async save(fields) {
         const isUpdate = !!this.id;
         const mutationName = `${isUpdate ? 'update' : 'create'}`;
-        const input =  this.readyInput();
-        if (isUpdate && Object.keys(this).length === 0) return this;
-        const query = this.generateMutation(fields,mutationName);
-        const data = await this.constructor.request(query, {id:this.id,input:input });
-        this.fill(data[mutationName+this.constructor.name]);
+        const input = this.readyInput();
+
+        if (isUpdate && Object.keys(input).length === 0) {
+            console.warn(`LaraQL [${this.constructor.name}]: No modified fields to save.`);
+            return this;
+        }
+
+        const query = this.generateMutation(fields, mutationName);
+        const data = await this.constructor.request(query, { id: this.id, input });
+        
+        const responseKey = mutationName + this.constructor.name;
+        if (data && data[responseKey]) {
+            this.fill(data[responseKey]);
+        }
         return this;
     }
 
     async delete(id) {
-        if (!this.id && !id) throw new Error("LaraQL: Cannot delete a model without an ID.");
-        const query = this.generateMutation(['id'],'delete');
-        await this.constructor.request(query, { id: id ?? this.id });
+        const targetId = id ?? this.id;
+        if (!targetId) throw new Error(`LaraQL [${this.constructor.name}]: Cannot delete a model without an ID.`);
+        
+        const query = this.generateMutation(['id'], 'delete');
+        await this.constructor.request(query, { id: targetId });
         return true;
     }
 
@@ -84,42 +98,38 @@ export default class Model {
         return this.query().where(...args);
     }
 
-    static whereRaw(rawObject={}){
-        return this.query().whereRaw(rawObject)
+    static whereRaw(rawObject = {}) {
+        return this.query().whereRaw(rawObject);
     }
-    static async all(fields = ['id']) {
+
+    static async all(fields) {
         return this.query().get(fields);
     }
 
     static async find(id, fields) {
-        fields = fields ? fields.join(' ') : this.returnType ?? 'id'
-        const query = `query($id: ID!) { ${this._singularName}(id: $id) { ${fields} } }`;
+        const fieldSelection = fields ? fields.join(' ') : (this.returnType ?? 'id');
+        const query = `query($id: ID!) { ${this._singularName}(id: $id) { ${fieldSelection} } }`;
         const data = await this.request(query, { id });
         return new this(data[this._singularName]);
     }
 
     static async request(query, variables = {}) {
         const url = `${this._effectiveBaseUrl}`;
-        
+        if (!url) throw new Error("LaraQL: Base URL not configured. Call Model.init() first.");
+
         let headers = {
             "Accept": "application/json",
             "Content-Type": "application/json"
         };
-         headers = _headersCallback(headers)
-        // Extract operationName for better server-side logging
+        headers = _headersCallback(headers);
+        
         const operationMatch = query?.match(/\b(query|mutation|subscription)\s+(\w+)/);
         const operationName = operationMatch ? operationMatch[2] : null;
 
         try {
-            const response = await _api.post(url, {
-                query,
-                variables,
-                operationName
-            }, { headers });
-
+            const response = await _api.post(url, { query, variables, operationName }, { headers });
             const errors = this._gatherErrors(response?.data?.errors ?? []);
 
-            // Check for authentication failure
             if (errors.some(e => e === "Unauthenticated.")) {
                 if (_onUnauthenticated) _onUnauthenticated();
                 throw new Error("Session expired. Please login again.");
@@ -138,59 +148,67 @@ export default class Model {
 
     static _gatherErrors(errors) {
         let error_messages = [];
-        errors.map(error => {
+        if (!Array.isArray(errors)) return error_messages;
+
+        errors.forEach(error => {
             if (error?.extensions?.validation) {
                 const validationErrors = Object.values(error.extensions.validation).flat();
                 error_messages.push(...this._gatherErrors(validationErrors));
             } else if (error?.message) {
                 error_messages.push(error.message);
-            } else if (typeof error == "string") {
+            } else if (typeof error === "string") {
                 error_messages.push(error);
             }
         });
-        return [...new Set(error_messages)]; // Unique errors only
+        return [...new Set(error_messages)];
     }
 
-    generateMutation(fields,operation='create'){
-            let input ='';
-            let insert = '';
-            fields = fields ?fields.join(' ') : this.constructor.returnType ?? 'id'
-            const operationName = operation+ this.constructor.name;
-            if(operation != 'delete'){
-                input +=`$input:${this.constructor.name}Input!`;
-                insert += 'input:$input'
-            }
-            if(operation == 'update'){
-                input += ','
-                insert += ','
-            }
-            if(operation != 'create'){
-                input += `$id:ID!`,
-                insert += 'id:$id'
-            }
-            return  `
-                mutation ${operationName}(${input}) {
-                    ${operationName}(${insert}){
-                        ${fields}
-                    }
+    generateMutation(fields, operation = 'create') {
+        let input = '';
+        let insert = '';
+        
+        const fieldsSelection = fields ? fields.join(' ') : (this.constructor.returnType ?? 'id');
+        const operationName = operation + this.constructor.name;
+        
+        if (operation !== 'delete') {
+            input += `$input: ${this.constructor.name}Input!`;
+            insert += 'input: $input';
+        }
+        if (operation === 'update') {
+            input += ', ';
+            insert += ', ';
+        }
+        if (operation !== 'create') {
+            input += `$id: ID!`;
+            insert += 'id: $id';
+        }
+        
+        return `
+            mutation ${operationName}(${input}) {
+                ${operationName}(${insert}) {
+                    ${fieldsSelection}
                 }
-            `
+            }
+        `;
     }
 
-    readyInput(){
-        let inputs = this.default ?? {};
-        this.constructor.fillable.forEach(element => {
-            if(this[element] == undefined || this.constructor?.dirty?.includes(element)){
+    readyInput() {
+        let inputs = {};
+        const fillableFields = this.constructor.fillable || [];
+        const dirtyFields = this.constructor.dirty || [];
+
+        fillableFields.forEach(element => {
+            if (this[element] === undefined || dirtyFields.includes(element)) {
                 return;
             }
-            inputs[element] = this[element]
+            inputs[element] = this[element];
         });
-        this.constructor?.dirty?.forEach((e)=>{
-            if(this[e] != this._dirty[e] ){
-                inputs[e] = this[e]
-            }
-        })
 
+        dirtyFields.forEach((e) => {
+            if (this[e] !== undefined && this[e] !== this._dirty[e]) {
+                inputs[e] = this[e];
+            }
+        });
 
         return inputs;
     }
