@@ -40,7 +40,8 @@ export default class QueryBuilder {
         }
         if (typeof obj === 'object' && obj !== null) {
             const entries = Object.entries(obj).map(([key, val]) => {
-                if (key === 'column' || key === 'operator') return `${key}: ${val.toUpperCase()}`;
+                if (key === 'column') return `${key}: "${val.toUpperCase()}"`;
+                if (key === 'operator') return `${key} : ${val.toUpperCase()}`;
                 if (key === 'value') return `value: ${JSON.stringify(val)}`;
                 return `${key}: ${this._stringifyCondition(val)}`;
             });
@@ -49,16 +50,16 @@ export default class QueryBuilder {
         return JSON.stringify(obj);
     }
 
-    async get(fields = ['id']) {
+    async get(fields) {
         let wherePart = '';
-
+        const fieldsSelection = fields ? fields.join(' ') : (this.model.returnType ?? 'id');
         if (this.rawWhere) {
             wherePart = `where: ${this._stringifyCondition(this.rawWhere)}`;
         } else if (this.filters.length > 0) {
             const conditions = this.filters.map(f => (
                 `{ column: "${f.column.toUpperCase()}", operator: ${f.operator.toUpperCase()}, value: ${JSON.stringify(f.value)} }`
             ));
-            wherePart = `where: { ${conditions.length > 1 ? `AND: [${conditions.join(', ')}]` : conditions[0]} }`;
+            wherePart = `where: { AND: [${conditions.join(', ')}]}`;
         }
 
         const args = [];
@@ -76,14 +77,14 @@ export default class QueryBuilder {
 
         let query;
         if (this._pagination) {
-            query = `query { 
+            query = `query ${this.model._pluralName} { 
                 ${this.model._pluralName}${argsString} { 
-                    data { ${fields.join(' ')} } 
+                    data { ${fieldsSelection} } 
                     paginatorInfo { total currentPage lastPage hasMorePages } 
                 } 
             }`;
         } else {
-            query = `query { ${this.model._pluralName}${argsString} {data {${fields.join(' ')} }} }`;
+            query = `query ${this.model._pluralName} { ${this.model._pluralName}${argsString} {data {${fieldsSelection} }} }`;
         }
 
         const response = await this.model.request(query);
