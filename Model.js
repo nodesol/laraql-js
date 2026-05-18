@@ -9,6 +9,7 @@ let _defaultBaseUrl = "";
 
 export default class Model {
     static baseUrl = "";
+    _dirty = {};
 
     constructor(attributes = {}) {
         this.fill(attributes);
@@ -40,6 +41,12 @@ export default class Model {
 
     fill(attributes) {
         Object.assign(this, attributes);
+        this.constructor?.dirty?.forEach((e)=>{
+        if (e in attributes) {
+            this._dirty[e] = attributes[e];
+        }
+        })
+        console.log(this)
         return this;
     }
 
@@ -47,13 +54,13 @@ export default class Model {
         return new this.constructor(JSON.parse(JSON.stringify(this)));
     }
 
-    async save(fields = ['id']) {
+    async save(fields) {
         const isUpdate = !!this.id;
         const mutationName = `${isUpdate ? 'update' : 'create'}`;
-        const {id,...input} =  this;
+        const input =  this.readyInput();
         if (isUpdate && Object.keys(this).length === 0) return this;
         const query = this.generateMutation(fields,mutationName);
-        const data = await this.constructor.request(query, {id:id,input:input });
+        const data = await this.constructor.request(query, {id:this.id,input:input });
         this.fill(data[mutationName+this.constructor.name]);
         return this;
     }
@@ -65,7 +72,7 @@ export default class Model {
         return true;
     }
 
-    async update(fields = ['id']) {
+    async update(fields) {
         return this.save(fields);
     }
 
@@ -84,8 +91,9 @@ export default class Model {
         return this.query().get(fields);
     }
 
-    static async find(id, fields = ['id']) {
-        const query = `query($id: ID!) { ${this._singularName}(id: $id) { ${fields.join(' ')} } }`;
+    static async find(id, fields) {
+        fields = fields ? fields.join(' ') : this.returnType ?? 'id'
+        const query = `query($id: ID!) { ${this._singularName}(id: $id) { ${fields} } }`;
         const data = await this.request(query, { id });
         return new this(data[this._singularName]);
     }
@@ -146,6 +154,7 @@ export default class Model {
     generateMutation(fields,operation='create'){
             let input ='';
             let insert = '';
+            fields = fields ?fields.join(' ') : this.constructor.returnType ?? 'id'
             const operationName = operation+ this.constructor.name;
             if(operation != 'delete'){
                 input +=`$input:${this.constructor.name}Input!`;
@@ -162,9 +171,27 @@ export default class Model {
             return  `
                 mutation ${operationName}(${input}) {
                     ${operationName}(${insert}){
-                        ${fields.join(" ")}
+                        ${fields}
                     }
                 }
             `
+    }
+
+    readyInput(){
+        let inputs = this.default ?? {};
+        this.constructor.fillable.forEach(element => {
+            if(this[element] == undefined || this.constructor?.dirty?.includes(element)){
+                return;
+            }
+            inputs[element] = this[element]
+        });
+        this.constructor?.dirty?.forEach((e)=>{
+            if(this[e] != this._dirty[e] ){
+                inputs[e] = this[e]
+            }
+        })
+
+
+        return inputs;
     }
 }

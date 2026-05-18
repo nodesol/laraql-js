@@ -1,6 +1,6 @@
 {
-  "name": "laraqlgraph",
-  "version": "1.0.1",
+  "name": "@nodesol/laraql",
+  "version": "1.0.0",
   "description": "An Eloquent-style ORM for Laravel Lighthouse GraphQL",
   "main": "index.js",
   "type": "module",
