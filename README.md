@@ -567,4 +567,4 @@ This project is licensed under the **MIT License**.
 
 ---
 
-Made with ❤️ by NodeSol
+Made with ❤️ by Nodesol Corp
