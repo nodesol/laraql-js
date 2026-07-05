@@ -14,11 +14,14 @@ export default class Model {
     static fillable = [];
     static dirty = [];
     _dirty = {};
-
+     
     constructor(attributes = {}) {
         this.fill(attributes);
     }
-
+    /**
+     * Global Configuration
+     * @param {Object} config - { url, api, headersCallback, router, onUnauthenticated }
+     */
     static init(config) {
         if (!config || typeof config !== 'object') return;
         if (config.url) _defaultBaseUrl = config.url;
@@ -92,6 +95,10 @@ export default class Model {
 
     static query() {
         return new QueryBuilder(this);
+    }
+
+    static paginate(first,page){
+        return this.query().paginate(first,page)
     }
 
     static where(...args) {
