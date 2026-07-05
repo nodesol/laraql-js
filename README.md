@@ -4,38 +4,29 @@ NodeSol/LaraQL is a lightweight, Eloquent-inspired JavaScript ORM for [Lighthous
 
 ## Installation
 
-Install LaraQL using npm:
-
 ```bash
 npm install @nodesol/laraql
 ```
 
----
-
 ## Setup
 
-Initialize the base model in your application entry point (`main.js`, `app.js`, or Quasar boot file).
+Initialize the base model in your application entry point or boot file (e.g., `app.js` or `main.js`).
 
 ```javascript
 import { Model } from '@nodesol/laraql';
 
 Model.init({
-  url: 'https://your-api.com/graphql',
-
+  url: 'https://your-api.com',
   headersCallback: () => ({
     Authorization: `Bearer ${localStorage.getItem('token')}`
   })
 });
 ```
 
-### Configuration Options
+## Basic Usage
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `url` | `string` | Your GraphQL endpoint |
-| `headersCallback` | `function` | Dynamically attach headers to requests |
-
-### Example with Quasar Boot File
+### Defining a Model
+Simply extend the base `Model` class.
 
 ```javascript
 import { Model } from '@nodesol/laraql';
@@ -82,11 +73,8 @@ class User extends Model {
 }
 ```
 
----
-
-# Defining a Model
-
-Create a model by extending the base `Model` class.
+### Fetching Data
+Use familiar methods like `all()`, `find()`, and `where()`.
 
 ```javascript
 // Fetch all users
@@ -97,176 +85,26 @@ const users = await User.all(['id', 'name', 'email']) OR await User.all();
 // Find a single user by ID return type work same as above
 const user = await User.find(1, ['name']) OR await User.find(1) ;
 
-  // Fields allowed in create/update operations
-  static fillable = [
-    'sub_system',
-    'email',
-    'hr_id',
-    'user_firstname',
-    'user_lastname',
-    'designation',
-    'is_visible',
-    'password',
-  ];
-
-  // Fields tracked for updates
-  static dirty = [
-    'user_lastname',
-    'sub_system'
-  ];
-
-  // Default GraphQL return fields
-  static returnType = `
-    id
-    email
-    hr_id
-    user_firstname
-    user_lastname
-    designation
-    is_visible
-    created_at
-    updated_at
-
-    roles {
-      id
-      team_id
-      name
-      guard_name
-      created_at
-      updated_at
-    }
-
-    permissions {
-      name
-      guard_name
-      created_at
-      updated_at
-    }
-  `;
-}
-```
-
-### Model Properties
-
-| Property | Description |
-|----------|-------------|
-| `fillable` | Fields allowed during `save()` and `update()` |
-| `dirty` | Tracks changed fields for optimized updates |
-| `returnType` | Default GraphQL fields returned |
-
----
-
-# Fetching Data
-
-LaraQL provides familiar Eloquent-style methods such as `all()`, `find()`, and `where()`.
-
----
-
-## Get All Records
-
-### Using Custom Return Fields
-
-```javascript
-const users = await User.all([
-  'id',
-  'user_firstname',
-  'email'
-]);
-```
-
-### Using Default Return Type
-
-```javascript
-const users = await User.all();
-```
-
-### Return Type Priority
-
-LaraQL resolves return fields in this order:
-
-1. Explicitly passed fields
-2. `static returnType`
-3. `id` (fallback)
-
----
-
-## Find a Single Record
-
-### Custom Return Fields
-
-```javascript
-const user = await User.find(1, [
-  'id',
-  'user_firstname'
-]);
-```
-
-### Using Default Return Type
-
-```javascript
-const user = await User.find(1);
-```
-
----
-
-# Query Builder
-
-Build expressive queries using Eloquent-style chaining.
-
-```javascript
-const users = await User
-  .where('designation', 'Manager')
-  .where('is_visible', true)
+// Complex Queries
+const activeAdmins = await User.where('type', 'employee')
+  .where('is_active', true)
   .orderBy('created_at', 'DESC')
   .get(['id', 'name']);//paginate also work
 ```
 
----
-
-## Multiple Where Conditions
-
-```javascript
-const users = await User
-  .where('department', 'IT')
-  .where('status', 'ACTIVE')
-  .get();
-```
-
----
-
-## Order By
+### Pagination
+LaraQL supports Lighthouse's `@paginate` directive out of the box.
 
 ```javascript
-const users = await User
-  .orderBy('created_at', 'DESC')
-  .get();
-```
-
----
-
-# Pagination
-
-LaraQL supports Lighthouse GraphQL pagination (`@paginate`) out of the box.
-
-```javascript
-const { data, paginatorInfo } = await User
-  .where('is_visible', true)
+const { data, paginatorInfo } = await User.where('active', true)
   .paginate(15, 1)
-  .get([
-    'id',
-    'user_firstname',
-    'email'
-  ]);
+  .get(['id', 'name']);
 
 console.log(paginatorInfo.total);
-console.log(data);
 ```
 
----
-
-# Complex Queries
-
-For nested `AND` / `OR` conditions, use `whereRaw()`.
+### Complex Where Conditions
+For nested `AND`/`OR` logic, use `whereRaw()`.
 
 ```javascript
 const users = await User.whereRaw({
@@ -318,3 +156,5 @@ const user = reactive(new User());
 
 
 User.delete(1);
+
+### test
