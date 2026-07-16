@@ -30,12 +30,22 @@ export default class Model {
         if (config.onUnauthenticated) _onUnauthenticated = config.onUnauthenticated;
     }
 
+    static get _modelName() {
+        if (!this.modelName) {
+            throw new Error(
+                `LaraQL: ${this.name} must define a static modelName property.`
+            );
+        }
+
+        return this.modelName;
+    }
+
     static get _effectiveBaseUrl() {
         return (this.baseUrl || _defaultBaseUrl).replace(/\/$/, "");
     }
 
     static get _singularName() {
-        return (this.name).split(/(?=[A-Z])/).join("_").toLowerCase();
+        return (this._modelName).split(/(?=[A-Z])/).join("_").toLowerCase();
     }
 
     static get _pluralName() {
@@ -66,14 +76,14 @@ export default class Model {
         const input = this.readyInput();
 
         if (isUpdate && Object.keys(input).length === 0) {
-            console.warn(`LaraQL [${this.constructor.name}]: No modified fields to save.`);
+            console.warn(`LaraQL [${this.constructor._modelName}]: No modified fields to save.`);
             return this;
         }
 
         const query = this.generateMutation(fields, mutationName);
         const data = await this.constructor.request(query, { id: this.id, input });
         
-        const responseKey = mutationName + this.constructor.name;
+        const responseKey = mutationName + this.constructor._modelName;
         if (data && data[responseKey]) {
             this.fill(data[responseKey]);
         }
@@ -82,7 +92,7 @@ export default class Model {
 
     async delete(id) {
         const targetId = id ?? this.id;
-        if (!targetId) throw new Error(`LaraQL [${this.constructor.name}]: Cannot delete a model without an ID.`);
+        if (!targetId) throw new Error(`LaraQL [${this.constructor._modelName}]: Cannot delete a model without an ID.`);
         
         const query = this.generateMutation(['id'], 'delete');
         await this.constructor.request(query, { id: targetId });
@@ -148,7 +158,7 @@ export default class Model {
 
             return response.data.data;
         } catch (error) {
-            console.error(`LaraQL [${this.name}] Request Error:`, error.message);
+            console.error(`LaraQL [${this._modelName}] Request Error:`, error.message);
             throw error;
         }
     }
@@ -175,10 +185,10 @@ export default class Model {
         let insert = '';
         
         const fieldsSelection = fields ? fields.join(' ') : (this.constructor.returnType ?? 'id');
-        const operationName = operation + this.constructor.name;
+        const operationName = operation + this.constructor._modelName;
         
         if (operation !== 'delete') {
-            input += `$input: ${this.constructor.name}Input!`;
+            input += `$input: ${this.constructor._modelName}Input!`;
             insert += 'input: $input';
         }
         if (operation === 'update') {

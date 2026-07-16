@@ -82,6 +82,9 @@ Create a model by extending the base `Model` class.
 import { Model } from '@nodesol/laraql';
 
 export class User extends Model {
+  
+  // must be defined in the model the build may change the class name 
+  static modelName = 'User' 
 
   // Fields allowed in create/update operations
   static fillable = [
